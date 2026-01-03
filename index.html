@@ -121,7 +121,7 @@
 </head>
 <body>
 <div class="container">
-    <h1>Connecting to Server</h1>
+    <h1>Redirecting to Dashboard</h1>
     <div class="spinner"></div>
     <div class="status" id="status">Detecting available routes...</div>
 
@@ -217,11 +217,6 @@
                 setTimeout(() => {
                     // Construct full URL with path, hash and query parameters
                     let redirectUrl = domain;
-
-                    // Add path if not root
-                    if (currentPath && currentPath !== '/') {
-                        redirectUrl += currentPath;
-                    }
 
                     // Add hash (which may contain path like /#/signup)
                     if (currentHash) {
