@@ -185,7 +185,7 @@
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-            const response = await fetch(domain, {
+            const response = await fetch(`${domain}/e/app.config.js`, {
                 method: 'HEAD',
                 mode: 'no-cors',
                 signal: controller.signal
