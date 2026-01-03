@@ -120,118 +120,136 @@
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Redirecting to Dashboard</h1>
-        <div class="spinner"></div>
-        <div class="status" id="status">Detecting available routes...</div>
-        
-        <div class="domain-list" id="domainList"></div>
-        
-        <div class="error-msg" id="errorMsg"></div>
-    </div>
+<div class="container">
+    <h1>Connecting to Server</h1>
+    <div class="spinner"></div>
+    <div class="status" id="status">Detecting available routes...</div>
 
-    <script>
-        // Configure backup domain list
-        const domains = [
-            'https://dash.swarmcloud.net',
-            'https://dash.meshify.cloud',
-            'https://dashboard.swarmcloud.org',
-            'https://dashboard.swarmcloud.net',
-            'https://swarmcloud-dashboard.b-cdn.net'
-        ];
+    <div class="domain-list" id="domainList"></div>
 
-        const domainStatus = {};
-        let foundDomain = null;
-        
-        // Get current URL query parameters
-        const currentParams = window.location.search;
+    <div class="error-msg" id="errorMsg"></div>
+</div>
 
-        // Initialize domain status
-        domains.forEach(domain => {
-            domainStatus[domain] = 'pending';
-        });
+<script>
+    // Configure backup domain list
+    const domains = [
+        'https://dash.swarmcloud.net',
+        'https://dash.meshify.cloud',
+        'https://dashboard.swarmcloud.org',
+        'https://dashboard.swarmcloud.net',
+        'https://swarmcloud-dashboard.b-cdn.net'
+    ];
 
-        // Render domain list
-        function renderDomainList() {
-            const listEl = document.getElementById('domainList');
-            // Only show domains that have been tested or are currently being tested
-            const testedDomains = domains.filter(domain => 
-                domainStatus[domain] !== 'pending'
-            );
-            
-            if (testedDomains.length === 0) {
-                listEl.innerHTML = '';
-                return;
-            }
-            
-            listEl.innerHTML = testedDomains.map(domain => {
-                const status = domainStatus[domain];
-                return `
+    const domainStatus = {};
+    let foundDomain = null;
+
+    // Get current URL path, hash and query parameters
+    const currentPath = window.location.pathname;
+    const currentHash = window.location.hash;
+    const currentSearch = window.location.search;
+
+    // Initialize domain status
+    domains.forEach(domain => {
+        domainStatus[domain] = 'pending';
+    });
+
+    // Render domain list
+    function renderDomainList() {
+        const listEl = document.getElementById('domainList');
+        // Only show domains that have been tested or are currently being tested
+        const testedDomains = domains.filter(domain =>
+          domainStatus[domain] !== 'pending'
+        );
+
+        if (testedDomains.length === 0) {
+            listEl.innerHTML = '';
+            return;
+        }
+
+        listEl.innerHTML = testedDomains.map(domain => {
+            const status = domainStatus[domain];
+            return `
                     <div class="domain-item">
                         <div class="status-icon status-${status}"></div>
                         <div class="domain-url">${domain}</div>
                     </div>
                 `;
-            }).join('');
-        }
+        }).join('');
+    }
 
-        // Check if a single domain is accessible
-        async function checkDomain(domain) {
-            domainStatus[domain] = 'testing';
+    // Check if a single domain is accessible
+    async function checkDomain(domain) {
+        domainStatus[domain] = 'testing';
+        renderDomainList();
+
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            const response = await fetch(domain, {
+                method: 'HEAD',
+                mode: 'no-cors',
+                signal: controller.signal
+            });
+
+            clearTimeout(timeoutId);
+            domainStatus[domain] = 'success';
             renderDomainList();
+            return true;
+        } catch (error) {
+            domainStatus[domain] = 'failed';
+            renderDomainList();
+            return false;
+        }
+    }
 
-            try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 5000);
+    // Check domains in sequence
+    async function findAvailableDomain() {
+        for (let i = 0; i < domains.length; i++) {
+            const domain = domains[i];
+            document.getElementById('status').textContent = `Testing route ${i + 1}/${domains.length}...`;
 
-                const response = await fetch(domain, {
-                    method: 'HEAD',
-                    mode: 'no-cors',
-                    signal: controller.signal
-                });
+            const isAvailable = await checkDomain(domain);
 
-                clearTimeout(timeoutId);
-                domainStatus[domain] = 'success';
-                renderDomainList();
-                return true;
-            } catch (error) {
-                domainStatus[domain] = 'failed';
-                renderDomainList();
-                return false;
+            if (isAvailable && !foundDomain) {
+                foundDomain = domain;
+                document.getElementById('status').textContent = 'Available route found, redirecting...';
+                setTimeout(() => {
+                    // Construct full URL with path, hash and query parameters
+                    let redirectUrl = domain;
+
+                    // Add path if not root
+                    if (currentPath && currentPath !== '/') {
+                        redirectUrl += currentPath;
+                    }
+
+                    // Add hash (which may contain path like /#/signup)
+                    if (currentHash) {
+                        redirectUrl += currentHash;
+                    }
+
+                    // Add query parameters if hash doesn't already contain them
+                    if (currentSearch && !currentHash.includes('?')) {
+                        redirectUrl += currentSearch;
+                    }
+
+                    window.location.href = redirectUrl;
+                }, 1000);
+                return;
             }
         }
 
-        // Check domains in sequence
-        async function findAvailableDomain() {
-            for (let i = 0; i < domains.length; i++) {
-                const domain = domains[i];
-                document.getElementById('status').textContent = `Testing route ${i + 1}/${domains.length}...`;
-                
-                const isAvailable = await checkDomain(domain);
-                
-                if (isAvailable && !foundDomain) {
-                    foundDomain = domain;
-                    document.getElementById('status').textContent = 'Available route found, redirecting...';
-                    setTimeout(() => {
-                        // Append query parameters if they exist
-                        const redirectUrl = domain + currentParams;
-                        window.location.href = redirectUrl;
-                    }, 1000);
-                    return;
-                }
-            }
+        // All domains unavailable
+        document.querySelector('.spinner').style.display = 'none';
+        document.getElementById('status').textContent = 'No available routes found';
+        document.getElementById('errorMsg').textContent = 'All routes are temporarily unavailable. Please try again later.';
+    }
 
-            // All domains unavailable
-            document.querySelector('.spinner').style.display = 'none';
-            document.getElementById('status').textContent = 'No available routes found';
-            document.getElementById('errorMsg').textContent = 'All routes are temporarily unavailable. Please try again later.';
-        }
-
-        // Start detection when page loads
-        window.addEventListener('DOMContentLoaded', () => {
-            renderDomainList();
-            findAvailableDomain();
-        });
-    </script>
+    // Start detection when page loads
+    window.addEventListener('DOMContentLoaded', () => {
+        renderDomainList();
+        findAvailableDomain();
+    });
+</script>
 </body>
 </html>
